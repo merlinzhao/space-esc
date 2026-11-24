@@ -38,8 +38,8 @@ for joystick_no in range(pygame.joystick.get_count()):
 async def menu():
     '''This loops displays the menu with the introduction and intructions. This
     is where you may return after you win or loose the game and when it first
-    starts. Spcebar or any button on the koystick will start the main game
-    loop.'''
+    starts. Spcebar or any button on the koystick starts the game: the menu
+    returns and run() starts main().'''
     #DISPLAY
     pygame.display.set_caption("Space Escape")       
 
@@ -66,25 +66,17 @@ async def menu():
     intro_image = pygame.image.load("./Intro/intro.gif")
     
     #ASSIGN
-    introGoing = True
     clock = pygame.time.Clock()
     #Menu game loop
-    while introGoing:
+    while True:
         #TIME
         clock.tick(60)
         #ENTITIES
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                introGoing = False 
-            elif event.type == pygame.JOYBUTTONDOWN:
+            if event.type == pygame.JOYBUTTONDOWN or \
+               (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE):
                 start_sound.play()
-                await main()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    start_sound.play()
-                    await main()
-                elif event.key == pygame.K_ESCAPE:
-                    introGoing = False             
+                return
         #REFRESH
         introSprites.clear(screen,background)
         introSprites.update()
@@ -92,7 +84,6 @@ async def menu():
         screen.blit(intro_image,(0,0)) 
         pygame.display.flip() 
         await asyncio.sleep(0)  # let the browser draw this frame
-    pygame.quit()
     
 async def end_game(game_decider):
     '''This function is called when a player lose or wins. It plays the 
@@ -116,31 +107,25 @@ async def end_game(game_decider):
         pygame.mixer.music.set_volume(0.6)        
     pygame.mixer.music.play(-1)
     #ASSIGN
-    endGoing = True
     clock = pygame.time.Clock()    
     #Winner game loop
-    while endGoing:
+    while True:
         #TIME
         clock.tick(60)
         #ENTITIES
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                endGoing = False 
-            elif event.type == pygame.JOYBUTTONDOWN:
-                await menu()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    await menu()
-                elif event.key == pygame.K_ESCAPE:
-                    endGoing = False           
+            if event.type == pygame.JOYBUTTONDOWN or \
+               (event.type == pygame.KEYDOWN and \
+                event.key in (pygame.K_SPACE, pygame.K_ESCAPE)):
+                return
         #REFRESH
         pygame.display.flip()
         await asyncio.sleep(0)  # let the browser draw this frame
-    pygame.quit()
     
 async def main():
     '''This function defines the 'mainline logic' for the game. This is wear 
-    the actualy game happens, full of sprites and movements.'''
+    the actualy game happens, full of sprites and movements. Returns 1 for a
+    win, 0 for a loss, or None if the player pressed Esc (back to the menu).'''
     #DISPLAY
     pygame.display.set_caption("Space Escape")    
     
@@ -183,12 +168,12 @@ async def main():
     #ACTION
     #ASSIGN
     clock = pygame.time.Clock()
-    keepGoing = True
+    #main loop ends by returning a result (see return statements)
     spawn_counter = 0
     
     hat = (0, 0)
     #MAIN GAME LOOP
-    while keepGoing:
+    while True:
         #TIME
         clock = pygame.time.Clock()
         clock.tick(60)   
@@ -274,7 +259,7 @@ async def main():
         #EVENTS
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                keepGoing = False 
+                return None
             #Joystick events    
             elif event.type == pygame.JOYHATMOTION:
                 if event.joy == 0:
@@ -293,7 +278,7 @@ async def main():
             #keys pressed down
             elif event.type == pygame.KEYDOWN:                     
                 if event.key == pygame.K_ESCAPE:
-                    keepGoing = False  
+                    return None
                 elif event.key == pygame.K_SPACE:
                     if player.get_canshoot() == True:
                         shoot_sound.play()
@@ -380,17 +365,26 @@ async def main():
             lifekeeper.reset_hit()
         #checks if theres a winner!
         if scorekeeper.get_points() >= 1000:
-            await end_game(1)
+            return 1
         #checks for loser...
         if (scorekeeper.get_points() <= 0) or (lifekeeper.get_life() == 0):
             fail_sound.play()
-            await end_game(0)
+            return 0
         #REFRESH
         allSprites.clear(screen,background)
         allSprites.update()
         allSprites.draw(screen)              
         pygame.display.flip()
         await asyncio.sleep(0)  # let the browser draw this frame
-    pygame.quit()
-        
-asyncio.run(menu())
+
+async def run():
+    '''Top-level loop: menu -> game -> result screen -> menu. Each screen
+    returns instead of calling the next one, so replays don't pile up and
+    Esc never shuts pygame down (which froze the game in the browser).'''
+    while True:
+        await menu()
+        result = await main()
+        if result is not None:
+            await end_game(result)
+
+asyncio.run(run())
